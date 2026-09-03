@@ -87,6 +87,44 @@ npm start       # one Node process serves the client, the API and the socket
 
 Then open <http://localhost:8787>. Set `PORT` to serve somewhere else.
 
+## Deploying
+
+**This app needs a host that runs a long-lived Node process.** Rooms live in
+that process's memory and clients hold open WebSocket connections to it, so it
+cannot run on serverless platforms — Vercel, Netlify Functions, Cloudflare
+Workers and friends have no inbound WebSocket support and no memory shared
+between invocations. Deploying there gives you a UI that loads and then reports
+*"Could not reach the server"*, because `/api/rooms` does not exist.
+
+### Render (blueprint included)
+
+`render.yaml` is in the repo. In the Render dashboard: **New → Blueprint →
+select this repo**. It provisions one free web service that serves the client,
+the API and the WebSocket from a single origin:
+
+| Setting | Value |
+| --- | --- |
+| Build | `npm ci --include=dev && npm run build` |
+| Start | `npm start` |
+| Health check | `/api/health` |
+
+`--include=dev` matters: the client build needs Vite and TypeScript, which a
+plain `npm ci` skips once `NODE_ENV=production`.
+
+Two things to know about the free tier. It sleeps after 15 minutes with no
+traffic and takes 30–60 seconds to wake, so the first person into a room after a
+quiet spell waits — an active meeting keeps it warm. And a sleep or a redeploy
+drops every room, which is the same guarantee the app already makes.
+
+### Anywhere else
+
+`npm start` is the whole contract: serve the repo with Node ≥ 20 and set `PORT`.
+Railway and Fly.io work with the same two commands.
+
+A `Dockerfile` is included for container hosts (Fly, Railway, Koyeb, Cloud Run,
+a plain VPS) — a multi-stage build that ships the server plus the built client
+and only the one runtime dependency.
+
 ## Keyboard
 
 | Key | Action |

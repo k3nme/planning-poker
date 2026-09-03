@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { DECK_LIST, DEFAULT_DECK, getDeck } from '../lib/decks';
+import { describeApiFailure, looksLikeJson } from '../lib/format';
 import { getStoredName, storeName, suggestName } from '../lib/session';
 import { Floaters } from './Backdrop';
 import { PlayingCard } from './PlayingCard';
@@ -168,11 +169,15 @@ export function Landing({ initialCode, onEnter, onThemeToggle, theme }: Props) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: roomName, deckId }),
       });
-      if (!response.ok) throw new Error('Could not create the room.');
+      if (!response.ok || !looksLikeJson(response)) {
+        setError(describeApiFailure(response.ok ? 404 : response.status));
+        setBusy(false);
+        return;
+      }
       const room = (await response.json()) as { id: string };
       enter(room.id);
     } catch {
-      setError('Could not reach the server. Is it running?');
+      setError(describeApiFailure());
       setBusy(false);
     }
   };
@@ -186,14 +191,20 @@ export function Landing({ initialCode, onEnter, onThemeToggle, theme }: Props) {
     setError('');
     try {
       const response = await fetch(`/api/rooms/${code}`);
-      if (response.status === 404) {
+      // A JSON 404 is a room that has ended; an HTML 404 is a missing API.
+      if (response.status === 404 && looksLikeJson(response)) {
         setError('No room with that code — it may have ended.');
+        setBusy(false);
+        return;
+      }
+      if (!response.ok || !looksLikeJson(response)) {
+        setError(describeApiFailure(response.ok ? 404 : response.status));
         setBusy(false);
         return;
       }
       enter(code);
     } catch {
-      setError('Could not reach the server. Is it running?');
+      setError(describeApiFailure());
       setBusy(false);
     }
   };

@@ -1,0 +1,23 @@
+# Render Blueprint. Point Render at this repo and it will pick this up:
+#   Dashboard → New → Blueprint → select the repo.
+#
+# One web service runs everything: the built client, the JSON API and the
+# WebSocket, all from a single origin. That is deliberate — rooms live in this
+# process's memory, so the app needs one long-lived process, not serverless
+# functions.
+services:
+  - type: web
+    name: planning-poker
+    runtime: node
+    plan: free
+    # --include=dev because the client build needs Vite and TypeScript, which
+    # a plain `npm ci` would skip once NODE_ENV is production.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production

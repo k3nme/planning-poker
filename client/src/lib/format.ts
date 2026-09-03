@@ -50,3 +50,27 @@ export async function copyText(text: string): Promise<boolean> {
     }
   }
 }
+
+/**
+ * Turns a failed API call into something that points at the real problem.
+ *
+ * A dead network and a host that answers 404 are very different faults, and
+ * "is the server running?" sends people hunting in the wrong place when the
+ * app has been deployed somewhere that never had an API to begin with.
+ */
+export function describeApiFailure(status?: number): string {
+  if (status === undefined) {
+    return 'Could not reach the server — check your connection.';
+  }
+  if (status === 404) {
+    return 'The server has no API at /api. If this is a deployment, it needs a host that runs Node, not serverless.';
+  }
+  if (status >= 500) {
+    return `The server hit an error (HTTP ${status}). Try again in a moment.`;
+  }
+  return `The server refused the request (HTTP ${status}).`;
+}
+
+/** A JSON endpoint that answers with HTML is a router serving the SPA shell. */
+export const looksLikeJson = (response: Response) =>
+  (response.headers.get('content-type') ?? '').includes('json');
