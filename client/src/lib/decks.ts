@@ -52,6 +52,15 @@ export const DECKS: Record<string, Deck> = {
       special('?', '?'), special('coffee', '☕'),
     ],
   },
+  confidence: {
+    id: 'confidence',
+    name: 'Fist of five',
+    hint: 'Confidence check, not an estimate. 1 is no faith, 5 is certain.',
+    cards: [
+      card('1'), card('2'), card('3'), card('4'), card('5'),
+      special('?', '?'),
+    ],
+  },
   sequential: {
     id: 'sequential',
     name: 'Sequential',

@@ -19,9 +19,9 @@ export function Toasts({
             className={clsx('toast', `toast--${toast.tone}`)}
             onClick={() => onDismiss(toast.id)}
             layout
-            initial={{ opacity: 0, x: 40, scale: 0.9 }}
+            initial={{ opacity: 0, x: -40, scale: 0.9 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 40, scale: 0.9, transition: { duration: 0.18 } }}
+            exit={{ opacity: 0, x: -40, scale: 0.9, transition: { duration: 0.18 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 32 }}
           >
             {toast.icon && <span className="toast__icon">{toast.icon}</span>}

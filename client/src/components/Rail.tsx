@@ -19,7 +19,7 @@ export function Rail({ room, youId, isHost, onKick, onPromote }: Props) {
   return (
     <aside className="rail">
       <AnimatePresence initial={false}>
-        {stats && (
+        {stats && room.activity === 'poker' && (
           <motion.section
             key="stats"
             className="rail__section"
@@ -147,7 +147,7 @@ export function Rail({ room, youId, isHost, onKick, onPromote }: Props) {
         </ul>
       </section>
 
-      {room.history.length > 0 && (
+      {room.history.length > 0 && room.activity === 'poker' && (
         <section className="rail__section">
           <h2 className="rail__title">Earlier rounds</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

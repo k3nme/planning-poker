@@ -257,11 +257,11 @@
 
 .toasts {
   position: fixed;
-  top: 18px;
-  right: 18px;
+  bottom: 18px;
+  left: 18px;
   z-index: var(--z-toast);
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 9px;
   pointer-events: none;
   max-width: min(340px, calc(100vw - 36px));

@@ -16,19 +16,19 @@ type Props = {
 
 const FEATURES = [
   {
-    icon: '⚡',
-    title: 'Live in a second',
-    body: 'Share a six-character code. No accounts, no invites, no install.',
+    icon: '🃏',
+    title: 'Estimate and refine',
+    body: 'Secret voting on six decks, with a backlog that records the result.',
+  },
+  {
+    icon: '🔁',
+    title: 'Standup, retro, review',
+    body: 'Round-robin standups, five retro layouts, demo agendas, health checks.',
   },
   {
     icon: '🕶️',
     title: 'Nothing is stored',
     body: 'Rooms live in memory. When the last person leaves, they are gone.',
-  },
-  {
-    icon: '🎴',
-    title: 'Five decks',
-    body: 'Fibonacci, t-shirts, powers of two — switch mid-session anytime.',
   },
 ];
 
@@ -227,7 +227,7 @@ export function Landing({ initialCode, onEnter, onThemeToggle, theme }: Props) {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <span className="dot dot--live" />
-          No sign-up · nothing stored · instant rooms
+          Every ceremony · nothing stored · instant rooms
         </motion.span>
 
         <h1 className="hero__title">
@@ -258,8 +258,8 @@ export function Landing({ initialCode, onEnter, onThemeToggle, theme }: Props) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
         >
-          Everyone picks a card in secret, then they all turn over at once. No anchoring,
-          no loudest-voice-wins, no spreadsheet afterwards.
+          Planning poker, refinement, standups, retros, reviews and health checks —
+          one room, one link, no anchoring and no spreadsheet afterwards.
         </motion.p>
 
           <HeroPreview />
@@ -458,7 +458,8 @@ export function Landing({ initialCode, onEnter, onThemeToggle, theme }: Props) {
       </div>
 
       <p className="landing__foot">
-        Rooms are swept from memory a few minutes after the last person leaves.
+        Six ceremonies in one room. Swept from memory a few minutes after the last
+        person leaves.
       </p>
     </div>
   );

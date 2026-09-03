@@ -15,22 +15,47 @@ import { WebSocketServer } from 'ws';
 
 import { DECKS, DEFAULT_DECK } from './src/decks.mjs';
 import {
+  ACTIVITIES,
+  HEALTH_DIMENSIONS,
+  HEALTH_LEVELS,
+  RETRO_TEMPLATES,
+  STANDUP_PROMPTS,
+} from './src/templates.mjs';
+import {
+  addItem,
+  advanceStandup,
+  castHealthVote,
   castVote,
   createRoom,
   ensureHost,
   everyoneVoted,
   getRoom,
   joinRoom,
+  estimateBacklogItem,
   markDisconnected,
   normalizeCode,
+  recordEstimate,
+  removeItem,
   removePlayer,
+  reorderItem,
+  resetHealth,
   resetRound,
   reveal,
   roomCount,
   serializeRoom,
+  setActivity,
   setDeck,
+  setRetroPhase,
+  setRetroTemplate,
+  setSprintGoal,
   setStory,
+  startStandup,
+  startTimer,
+  stopStandup,
+  stopTimer,
   sweep,
+  updateItem,
+  voteItem,
 } from './src/rooms.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -103,6 +128,16 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/api/decks') {
     return sendJson(res, 200, { decks: Object.values(DECKS), defaultDeck: DEFAULT_DECK });
+  }
+
+  if (url.pathname === '/api/templates') {
+    return sendJson(res, 200, {
+      activities: ACTIVITIES,
+      retroTemplates: Object.values(RETRO_TEMPLATES),
+      healthDimensions: HEALTH_DIMENSIONS,
+      healthLevels: HEALTH_LEVELS,
+      standupPrompts: STANDUP_PROMPTS,
+    });
   }
 
   if (url.pathname === '/api/rooms' && req.method === 'POST') {
@@ -324,6 +359,181 @@ const handlers = {
     const allowed = ['👍', '🎉', '🤔', '😂', '🔥', '☕', '👀', '🙌'];
     if (!allowed.includes(msg.emoji)) return;
     broadcast(ctx.room.id, { t: 'emote', emoji: msg.emoji, from: ctx.player.id, name: ctx.player.name });
+  },
+
+  /* ---------------------------------------------------------- Ceremonies -- */
+
+  activity(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (setActivity(ctx.room, msg.activity)) {
+      const name = ACTIVITIES.find((entry) => entry.id === ctx.room.activity)?.name;
+      pushState(ctx.room, { kind: 'activity', name });
+    }
+  },
+
+  sprintGoal(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    setSprintGoal(ctx.room, msg.goal);
+    pushState(ctx.room);
+  },
+
+  timerStart(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    startTimer(ctx.room, msg.seconds, msg.label);
+    pushState(ctx.room, { kind: 'timer', label: ctx.room.timer.label });
+  },
+
+  timerStop(ws) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    stopTimer(ctx.room);
+    pushState(ctx.room);
+  },
+
+  /* --- generic list items: backlog, retro, review, actions, parking, DoD --- */
+
+  itemAdd(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx) return;
+    const item = addItem(ctx.room, msg.list, {
+      text: msg.text,
+      column: msg.column,
+      authorId: ctx.player.id,
+      authorName: ctx.player.name,
+      meta: msg.meta && typeof msg.meta === 'object' ? msg.meta : {},
+    });
+    if (item) pushState(ctx.room);
+  },
+
+  itemUpdate(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx) return;
+    const list = ctx.room.lists[msg.list];
+    const existing = list?.find((entry) => entry.id === msg.itemId);
+    if (!existing) return;
+    // Your own card is yours; everything else needs the host.
+    const mine = existing.authorId === ctx.player.id;
+    if (!mine && !requireHost(ctx.room, ctx.player)) return;
+    if (updateItem(ctx.room, msg.list, msg.itemId, msg.patch ?? {})) pushState(ctx.room);
+  },
+
+  itemRemove(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx) return;
+    const list = ctx.room.lists[msg.list];
+    const existing = list?.find((entry) => entry.id === msg.itemId);
+    if (!existing) return;
+    if (existing.authorId !== ctx.player.id && !requireHost(ctx.room, ctx.player)) return;
+    if (removeItem(ctx.room, msg.list, msg.itemId)) pushState(ctx.room);
+  },
+
+  itemReorder(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (reorderItem(ctx.room, msg.list, msg.itemId, msg.toIndex)) pushState(ctx.room);
+  },
+
+  itemVote(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx) return;
+    if (msg.list === 'retro' && ctx.room.retro.phase !== 'vote') return;
+    if (voteItem(ctx.room, msg.list, msg.itemId, ctx.player.id, msg.delta ?? 1)) {
+      pushState(ctx.room);
+    }
+  },
+
+  /* --- retro --- */
+
+  retroTemplate(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (setRetroTemplate(ctx.room, msg.templateId)) pushState(ctx.room);
+  },
+
+  retroPhase(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (setRetroPhase(ctx.room, msg.phase)) {
+      pushState(ctx.room, { kind: 'retro', phase: ctx.room.retro.phase });
+    }
+  },
+
+  retroSettings(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (typeof msg.anonymous === 'boolean') ctx.room.retro.anonymous = msg.anonymous;
+    if (typeof msg.votesPerPerson === 'number') {
+      ctx.room.retro.votesPerPerson = Math.max(1, Math.min(10, Math.round(msg.votesPerPerson)));
+    }
+    pushState(ctx.room);
+  },
+
+  /* --- standup --- */
+
+  standupStart(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (typeof msg.perPerson === 'number') {
+      ctx.room.standup.perPerson = Math.max(15, Math.min(600, Math.round(msg.perPerson)));
+    }
+    startStandup(ctx.room, { shuffle: msg.shuffle !== false });
+    pushState(ctx.room, { kind: 'standup' });
+  },
+
+  standupNext(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    if (advanceStandup(ctx.room, msg.step === -1 ? -1 : 1)) pushState(ctx.room);
+  },
+
+  standupStop(ws) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    stopStandup(ctx.room);
+    pushState(ctx.room);
+  },
+
+  /* --- health check --- */
+
+  healthVote(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || ctx.room.health.revealed) return;
+    if (castHealthVote(ctx.room, ctx.player.id, msg.dimension, msg.level ?? null)) {
+      pushState(ctx.room);
+    }
+  },
+
+  healthReveal(ws) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    ctx.room.health.revealed = true;
+    pushState(ctx.room, { kind: 'health' });
+  },
+
+  healthReset(ws) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    resetHealth(ctx.room);
+    pushState(ctx.room);
+  },
+
+  /* --- backlog <-> poker --- */
+
+  estimateItem(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    const item = estimateBacklogItem(ctx.room, msg.itemId);
+    if (item) pushState(ctx.room, { kind: 'estimating', name: item.text });
+  },
+
+  recordEstimate(ws, msg) {
+    const ctx = contextFor(ws);
+    if (!ctx || !requireHost(ctx.room, ctx.player)) return;
+    const item = recordEstimate(ctx.room, msg.value ?? null);
+    if (item) pushState(ctx.room, { kind: 'estimated', name: item.text });
   },
 
   leave(ws) {

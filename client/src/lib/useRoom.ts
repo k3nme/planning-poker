@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  ActivityId,
   ConnectionStatus,
   FlyingEmote,
+  Item,
+  ListName,
+  RetroPhase,
   RoomEvent,
   RoomState,
   ServerMessage,
@@ -172,6 +176,18 @@ export function useRoom({ roomId, name, spectator = false, onFatal }: Options) {
       case 'host':
         pushToast({ text: `${event.name} is now the host`, tone: 'neutral', icon: '👑' });
         break;
+      case 'activity':
+        if (event.name) pushToast({ text: `Now running: ${event.name}`, tone: 'neutral', icon: '🎛' });
+        break;
+      case 'timer':
+        pushToast({ text: `${event.label} started`, tone: 'neutral', icon: '⏱' });
+        break;
+      case 'estimating':
+        pushToast({ text: `Estimating "${event.name}"`, tone: 'neutral', icon: '🃏' });
+        break;
+      case 'estimated':
+        pushToast({ text: `Estimate saved to the backlog`, tone: 'good', icon: '✅' });
+        break;
       default:
         break;
     }
@@ -196,9 +212,51 @@ export function useRoom({ roomId, name, spectator = false, onFatal }: Options) {
       transferHost: (playerId: string) => send({ t: 'transferHost', playerId }),
       kick: (playerId: string) => send({ t: 'kick', playerId }),
       emote: (emoji: string) => send({ t: 'emote', emoji }),
+
+      /* --- ceremonies --- */
+      setActivity: (activity: ActivityId) => send({ t: 'activity', activity }),
+      setSprintGoal: (goal: string) => send({ t: 'sprintGoal', goal }),
+      startTimer: (seconds: number, label: string) => send({ t: 'timerStart', seconds, label }),
+      stopTimer: () => send({ t: 'timerStop' }),
+
+      /* --- list items, shared by every board in the room --- */
+      addItem: (list: ListName, text: string, extra: Partial<Pick<Item, 'column' | 'meta'>> = {}) =>
+        send({ t: 'itemAdd', list, text, column: extra.column, meta: extra.meta }),
+      updateItem: (list: ListName, itemId: string, patch: Record<string, unknown>) =>
+        send({ t: 'itemUpdate', list, itemId, patch }),
+      removeItem: (list: ListName, itemId: string) => send({ t: 'itemRemove', list, itemId }),
+      reorderItem: (list: ListName, itemId: string, toIndex: number) =>
+        send({ t: 'itemReorder', list, itemId, toIndex }),
+      voteItem: (list: ListName, itemId: string, delta: number) =>
+        send({ t: 'itemVote', list, itemId, delta }),
+
+      /* --- retro --- */
+      setRetroTemplate: (templateId: string) => send({ t: 'retroTemplate', templateId }),
+      setRetroPhase: (phase: RetroPhase) => send({ t: 'retroPhase', phase }),
+      setRetroSettings: (settings: { anonymous?: boolean; votesPerPerson?: number }) =>
+        send({ t: 'retroSettings', ...settings }),
+
+      /* --- standup --- */
+      startStandup: (perPerson: number, shuffle: boolean) =>
+        send({ t: 'standupStart', perPerson, shuffle }),
+      nextSpeaker: (step: 1 | -1 = 1) => send({ t: 'standupNext', step }),
+      stopStandup: () => send({ t: 'standupStop' }),
+
+      /* --- health check --- */
+      healthVote: (dimension: string, level: string | null) =>
+        send({ t: 'healthVote', dimension, level }),
+      revealHealth: () => send({ t: 'healthReveal' }),
+      resetHealth: () => send({ t: 'healthReset' }),
+
+      /* --- backlog <-> poker --- */
+      estimateItem: (itemId: string) => send({ t: 'estimateItem', itemId }),
+      recordEstimate: (value: string | null) => send({ t: 'recordEstimate', value }),
     }),
     [send],
   );
 
   return { room, you, youId, isHost, status, toasts, emotes, lastEvent, actions, pushToast, dismissToast };
 }
+
+/** The action surface every ceremony stage is handed. */
+export type RoomActions = ReturnType<typeof useRoom>['actions'];

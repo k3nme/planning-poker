@@ -1,31 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { ConnectionStatus, RoomState, Player } from '../types';
-import { DECK_LIST, getDeck } from '../lib/decks';
-import { celebrate } from '../lib/confetti';
-import { copyText, formatDuration, roomUrl } from '../lib/format';
+import type { ActivityId, ConnectionStatus, RoomState, Player } from '../types';
+import type { RoomActions } from '../lib/useRoom';
+import { DECK_LIST } from '../lib/decks';
+import { ACTIVITIES } from '../lib/templates';
+import { copyText, roomUrl } from '../lib/format';
 import { storeName } from '../lib/session';
+import { ActivityBar } from './ActivityBar';
 import { Avatar } from './Avatar';
-import { Console } from './Console';
-import { Hand } from './Hand';
 import { Rail } from './Rail';
-import { Table } from './Table';
-
-const EMOJIS = ['👍', '🎉', '🤔', '😂', '🔥', '☕'];
-
-type Actions = {
-  vote: (value: string | null) => void;
-  reveal: () => void;
-  reset: () => void;
-  setStory: (title: string) => void;
-  setDeck: (deckId: string) => void;
-  setAutoReveal: (value: boolean) => void;
-  setSpectator: (value: boolean) => void;
-  rename: (name: string) => void;
-  transferHost: (playerId: string) => void;
-  kick: (playerId: string) => void;
-  emote: (emoji: string) => void;
-};
+import { TimeboxBar } from './TimeboxBar';
+import { BacklogStage } from './stages/BacklogStage';
+import { HealthStage } from './stages/HealthStage';
+import { PokerStage } from './stages/PokerStage';
+import { RetroStage } from './stages/RetroStage';
+import { ReviewStage } from './stages/ReviewStage';
+import { StandupStage } from './stages/StandupStage';
 
 type Props = {
   room: RoomState;
@@ -33,7 +23,7 @@ type Props = {
   youId: string | null;
   isHost: boolean;
   status: ConnectionStatus;
-  actions: Actions;
+  actions: RoomActions;
   theme: 'dark' | 'light';
   onThemeToggle: () => void;
   onLeave: () => void;
@@ -66,18 +56,6 @@ function Switch({ on, onToggle, label, hint }: { on: boolean; onToggle: () => vo
   );
 }
 
-function Timer({ from, frozenAt }: { from: number; frozenAt: number | null }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (frozenAt) return undefined;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [frozenAt]);
-
-  return <span className="timer">{formatDuration((frozenAt ?? now) - from)}</span>;
-}
-
 export function Room({
   room,
   you,
@@ -92,26 +70,12 @@ export function Room({
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [storyDraft, setStoryDraft] = useState(room.story);
   const [nameDraft, setNameDraft] = useState(you?.name ?? '');
-  const celebratedRound = useRef(-1);
-  const deck = getDeck(room.deckId);
-
-  useEffect(() => {
-    setStoryDraft(room.story);
-  }, [room.story, room.round]);
+  const activity = ACTIVITIES.find((entry) => entry.id === room.activity) ?? ACTIVITIES[0];
 
   useEffect(() => {
     if (you?.name) setNameDraft(you.name);
   }, [you?.name]);
-
-  /* One burst per unanimous round, never twice. */
-  useEffect(() => {
-    if (!room.revealed || !room.stats?.consensus) return;
-    if (celebratedRound.current === room.round) return;
-    celebratedRound.current = room.round;
-    window.setTimeout(() => celebrate(undefined, 130), 480);
-  }, [room.revealed, room.stats?.consensus, room.round]);
 
   /* Escape closes the settings sheet. */
   useEffect(() => {
@@ -131,28 +95,24 @@ export function Room({
     window.setTimeout(() => setCopied(false), 1800);
   }, [room.id, onCopied]);
 
-  /* Host shortcuts: space reveals, N starts the next round. */
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
-      if (!isHost) return;
-      if (event.code === 'Space' && !room.revealed) {
-        event.preventDefault();
-        actions.reveal();
-      }
-      if (event.key.toLowerCase() === 'n' && room.revealed) {
-        event.preventDefault();
-        actions.reset();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [actions, isHost, room.revealed]);
-
-  const voters = room.players.filter((player) => !player.spectator && player.connected);
-  const canReveal = voters.length > 0 && voters.every((player) => player.hasVoted);
   const connected = room.players.filter((player) => player.connected);
+
+  /* A count on each tab so people can see where the work is piling up. */
+  const badges: Partial<Record<ActivityId, number>> = {
+    backlog: room.lists.backlog.length,
+    retro: room.retro.cardCount,
+    review: room.lists.review.length,
+    health: room.health.revealed ? room.health.responded : undefined,
+  };
+
+  const Stage = {
+    poker: PokerStage,
+    backlog: BacklogStage,
+    standup: StandupStage,
+    retro: RetroStage,
+    review: ReviewStage,
+    health: HealthStage,
+  }[room.activity];
 
   return (
     <div className="room">
@@ -164,8 +124,12 @@ export function Room({
         <div className="room__id">
           <span className="room__name">{room.name}</span>
           <span className="room__meta">
-            <span className={`dot ${status === 'live' ? 'dot--live' : status === 'closed' ? 'dot--bad' : 'dot--warn'}`} />
-            {STATUS_TEXT[status]} · {deck.name}
+            <span
+              className={`dot ${
+                status === 'live' ? 'dot--live' : status === 'closed' ? 'dot--bad' : 'dot--warn'
+              }`}
+            />
+            {STATUS_TEXT[status]} · {activity.name}
           </span>
         </div>
 
@@ -227,64 +191,37 @@ export function Room({
         </button>
       </header>
 
+      <ActivityBar
+        current={room.activity}
+        isHost={isHost}
+        onSelect={actions.setActivity}
+        badges={badges}
+      />
+
+      <TimeboxBar
+        timer={room.timer}
+        sprintGoal={room.sprintGoal}
+        isHost={isHost}
+        onStart={actions.startTimer}
+        onStop={actions.stopTimer}
+        onGoal={actions.setSprintGoal}
+        activityName={activity.name}
+      />
+
       <div className="room__body">
         <main className="stage">
-          <div className="story">
-            <span className="story__round">Round {room.round}</span>
-            <input
-              className="story__input"
-              value={storyDraft}
-              disabled={!isHost}
-              placeholder={isHost ? 'What are we estimating?' : 'No story set'}
-              maxLength={140}
-              onChange={(event) => setStoryDraft(event.target.value)}
-              onBlur={() => actions.setStory(storyDraft)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
-              }}
-              aria-label="Story being estimated"
-            />
-            <Timer from={room.roundStartedAt} frozenAt={room.revealedAt} />
-          </div>
-
-          <Table
-            players={room.players}
-            deckId={room.deckId}
-            revealed={room.revealed}
-            youId={youId}
-          >
-            <Console
-              room={room}
-              isHost={isHost}
-              canReveal={canReveal}
-              onReveal={actions.reveal}
-              onReset={actions.reset}
-            />
-          </Table>
-
-          <div className="emote-bar">
-            {EMOJIS.map((emoji) => (
-              <motion.button
-                key={emoji}
-                type="button"
-                className="emote-bar__btn"
-                onClick={() => actions.emote(emoji)}
-                whileHover={{ scale: 1.25, y: -3 }}
-                whileTap={{ scale: 0.85 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                aria-label={`React with ${emoji}`}
-              >
-                {emoji}
-              </motion.button>
-            ))}
-          </div>
-
-          <Hand
-            deck={deck}
-            selected={you?.vote ?? null}
-            disabled={room.revealed || Boolean(you?.spectator)}
-            onSelect={actions.vote}
-          />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={room.activity}
+              className="stage__inner"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <Stage room={room} you={you} youId={youId} isHost={isHost} actions={actions} />
+            </motion.div>
+          </AnimatePresence>
         </main>
 
         <Rail
