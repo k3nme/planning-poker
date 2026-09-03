@@ -1,0 +1,227 @@
+/* ------------------------------------------------------------------
+   Playing cards: one component used at three scales — the hand at the
+   bottom, the seat cards around the table, and decorative cards on the
+   landing page.
+   ------------------------------------------------------------------ */
+
+.card-shell {
+  width: var(--card-w);
+  height: var(--card-h);
+  flex: none;
+  perspective: 900px;
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  transform-style: preserve-3d;
+  user-select: none;
+}
+
+.card__face,
+.card__back {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.card__face {
+  background: var(--card-face);
+  border: 1px solid var(--card-face-border);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  color: var(--ink);
+}
+
+.card__back {
+  transform: rotateY(180deg);
+  background: var(--card-back);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Diamond lattice on the card back. */
+.card__back::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background-image: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.12) 0 1px,
+      transparent 1px 9px
+    ),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 9px);
+}
+
+.card__back::after {
+  content: '♠';
+  position: relative;
+  font-size: calc(var(--card-w) * 0.36);
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.card__value {
+  font-family: var(--font-mono);
+  font-size: calc(var(--card-w) * 0.42);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  background: var(--accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.card__value--text {
+  font-family: var(--font-sans);
+  font-size: calc(var(--card-w) * 0.3);
+  font-weight: 800;
+}
+
+.card__value--emoji {
+  background: none;
+  color: initial;
+  -webkit-text-fill-color: initial;
+  font-size: calc(var(--card-w) * 0.4);
+}
+
+.card__corner {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: calc(var(--card-w) * 0.15);
+  font-weight: 700;
+  color: var(--ink-mute);
+  line-height: 1;
+}
+
+.card__corner--tl {
+  top: 7px;
+  left: 8px;
+}
+
+.card__corner--br {
+  bottom: 7px;
+  right: 8px;
+  rotate: 180deg;
+}
+
+.card__shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.22), transparent 46%);
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------- The "hand" -- */
+
+.hand {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 30px 16px calc(26px + env(safe-area-inset-bottom));
+  min-height: 196px;
+  z-index: var(--z-hand);
+}
+
+.hand__inner {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0 calc(var(--card-w) * 0.35);
+}
+
+.hand__slot {
+  margin-inline: calc(var(--card-w) * -0.26);
+  transform-origin: bottom center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hand__slot:hover .card__shine,
+.hand__slot[data-selected='true'] .card__shine {
+  opacity: 1;
+}
+
+.hand__slot[data-selected='true'] .card__face {
+  border-color: rgba(167, 139, 250, 0.85);
+  box-shadow: 0 0 0 1.5px rgba(167, 139, 250, 0.6), 0 18px 40px -12px var(--glow);
+}
+
+.hand__slot[data-disabled='true'] {
+  cursor: default;
+  opacity: 0.35;
+  filter: saturate(0.4);
+}
+
+.hand__hint {
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  translate: -50% 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  margin: 0 2px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------- Hand on mobile -- */
+
+@media (max-width: 720px) {
+  /* Tighter overlap so a 13-card deck still fits a 360px screen, with a
+     horizontal scroll as the safety net for anything narrower. */
+  .hand {
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hand::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hand__inner {
+    margin: 0 auto;
+    padding: 0 calc(var(--card-w) * 0.3);
+  }
+
+  .hand__slot {
+    margin-inline: calc(var(--card-w) * -0.32);
+  }
+
+  /* No physical keyboard to hint at, and it would scroll with the fan. */
+  .hand__hint {
+    display: none;
+  }
+}

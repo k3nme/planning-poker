@@ -1,0 +1,21 @@
+{
+  "name": "planning-poker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Real-time planning poker with zero data storage — rooms live in memory and disappear when everyone leaves.",
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w client",
+    "start": "node server/index.mjs",
+    "typecheck": "npm run typecheck -w client",
+    "lint": "npm run typecheck"
+  }
+}
